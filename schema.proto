@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package secure_vault;
+
+// The request sent by Ayush's Agent to Tanmay's Server
+message KeyRequest {
+  string file_id = 1;      // The unique identifier of the file the user is trying to open
+  string ip_address = 2;   // The local/public IP extracted from the receiver's machine
+  string device_hash = 3;  // The hardware fingerprint (CPUID, Motherboard UUID, MAC addresses)
+  bytes tpm_quote = 4;     // The cryptographic Quote requested from the physical TPM 2.0 chip
+  bytes nonce = 5;         // The server-provided nonce to prevent replay attacks
+  bytes agent_public_key = 6; // X25519 Ephemeral Public Key for ECDH
+}
+
+// The response sent by Tanmay's Server back to Ayush's Agent
+message KeyResponse {
+  bytes wrapped_dek = 1;   // The Data Encryption Key (AES) wrapped in the one-time ChaCha20-Poly1305 key
+  bool is_approved = 2;    // A simple flag indicating if the server approved the request
+  string error_message = 3; // If is_approved is false, this tells the agent why
+}
