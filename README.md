@@ -1,4 +1,4 @@
-# CAPTAIN-BLACTRACT / Secure File Sharing System (SFSS)
+# Secure File Sharing System (SFSS)
 
 A Zero-Trust, Hardware-Bound Cryptographic File System designed to tightly decouple **File Storage** from **Cryptographic Key Management (KMS)**. This system allows encrypted `.enc` files to be independently distributed anywhere, but they absolutely cannot be decrypted unless the executing machine's physical hardware matches strict Access Control policies authenticated via a secure mutual-TLS (mTLS) tunnel to a central KMS server.
 
