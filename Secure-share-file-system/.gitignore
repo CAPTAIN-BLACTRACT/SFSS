@@ -1,0 +1,17 @@
+# Environment Variables (NEVER PUSH THESE)
+.env
+*.env
+.env.*
+
+# Rust / Cargo Build Folders
+**/target/
+Cargo.lock
+
+# Frontend / Node Build Folders
+**/node_modules/
+dist/
+build/
+
+# OS Generated Files
+.DS_Store
+Thumbs.db

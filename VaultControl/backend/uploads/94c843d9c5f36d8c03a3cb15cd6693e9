@@ -1,0 +1,91 @@
+1. Ayush: The Systems & Endpoint Engineer (The Agent)
+
+Mission: Build the impenetrable client that runs on the receiver's machine. It must extract hardware telemetry, request the key, lock the memory, and wipe it.
+Stack: Rust (low-level bindings).
+
+Detailed To-Do List:
+
+    Initialize the Rust binary project and implement the mlock system call to secure a dedicated memory buffer, ensuring the OS cannot swap it to disk.
+
+    Write the memory-wiping logic using the zeroize crate, implementing the ZeroizeOnDrop trait on your secure buffer so the compiler cannot optimize away the cleanup.
+
+    Write the signal handlers (e.g., using signal-hook) to trap SIGINT or SIGTERM, forcing an immediate memory wipe if the user force-quits the application.
+
+    Implement the hardware telemetry extraction: use core::arch::x86_64::__cpuid to get CPU details, and write direct OS reads to fetch the SMBIOS/Motherboard UUID.
+
+    Integrate the rustls crate to establish the mTLS connection with the KMS, ensuring the agent strictly verifies the pinned server certificate.
+
+2. Tanmay: The Cryptography & Backend Architect (The KMS)
+
+Mission: Build the gatekeeper. This server validates the incoming hardware/network telemetry against the database and securely wraps the Data Encryption Key.
+Stack: Rust (Backend framework like Axum or Actix).
+
+Detailed To-Do List:
+
+    Set up the API Gateway to terminate the mTLS connections, verifying the unique client certificate presented by Ayush's agent.
+
+    Build the Context Engine middleware: write the logic that takes the incoming IP address, converts it, and compares it against the allowed CIDR block stored in the database.
+
+    Implement the cryptographic core: write the functions that generate a one-time symmetric key (ChaCha20-Poly1305), wrap the requested DEK in it, and prepare it for transmission.
+
+    Write the verification logic that compares the incoming hardware hash from the agent against the allowed_device_hash in the database.
+
+    Create the database connection pool (using SQLx or Diesel) to securely read from the State Ledger without SQL injection vulnerabilities.
+
+3. Shabi: The Full-Stack Integration Developer (The Ledger & Dashboard)
+
+Mission: Build the control plane for the sender. This involves the database schema and a sleek frontend to manage access.
+Stack: PostgreSQL, React, Vite.
+
+Detailed To-Do List:
+
+    Deploy the PostgreSQL database and write the migration scripts to create the Users, Files_Vault, Access_Policies, and Audit_Ledger tables.
+
+    Scaffold the frontend sender dashboard using React and Vite for rapid, hot-reloading development.
+
+    Build the "Access Control" UI component where a sender can input a specific IP address (CIDR) or click a "Revoke Access" toggle for a specific file.
+
+    Write the backend REST/GraphQL API that allows the React dashboard to safely update the global_status or is_revoked flags in the PostgreSQL database.
+
+    Build the Audit Log view so the sender can see exactly who attempted to open their file, their IP, and whether they were approved or denied.
+
+4. Adnan: The UI/UX & Protocol Developer (The Glue)
+
+Mission: Define the exact language the system uses to communicate and build the user-facing interface for the secure agent.
+Stack: Protocol Buffers, Rust (CLI/GUI).
+
+Detailed To-Do List:
+
+    Write the schema.proto file. This must explicitly define the structures for KeyRequest (containing the file ID, device hash, and IP) and KeyResponse (containing the wrapped DEK).
+
+    Compile the .proto file into Rust data structures using the prost crate so Ayush and Tanmay can import them directly.
+
+    Build a command-line interface (using clap in Rust) or a very basic file-picker GUI so the receiver can select the encrypted file they want to open.
+
+    Wire the file-picker directly into Ayush's secure memory buffer, passing the file path down to the low-level decryption engine.
+
+    Write basic unit tests passing mock/dummy data through the Protobuf structures to ensure they serialize and deserialize correctly.
+
+The Synchronization Strategy (How to avoid integration hell)
+
+To ensure the software comes together as a whole rapidly, you must enforce these sync protocols from Day 1:
+
+Phase 1: The Schema Contract
+Before anyone writes a single line of database logic or cryptographic math, Adnan and Shabi must finalize the Protobuf schema and the Database schema. Ayush and Tanmay must agree to this contract. Once locked, Ayush knows exactly what data to send, and Tanmay knows exactly what to expect.
+
+Phase 2: The "Fake" End-to-End Run
+Do not wait for the real cryptography to be finished.
+
+    Ayush builds an agent that extracts fake hardware data and requests a key.
+
+    Tanmay builds an endpoint that accepts the Protobuf request, ignores the math, and returns a hardcoded dummy key.
+
+    Goal: Prove that the Rust agent can successfully talk to the Rust server over mTLS using the Protobuf schema.
+
+Phase 3: The Dashboard Bind
+Shabi wires the React/Vite dashboard to the database.
+
+    Goal: Shabi toggles "Revoke" on the Vite frontend. Tanmay's server queries the database, sees the revoke flag, and successfully denies Ayush's agent the dummy key.
+
+Phase 4: Cryptographic Swap
+Only when the pipeline (Agent -> Server -> Database -> Dashboard) is successfully passing dummy data do you swap in the real encryption, the real mlock memory buffers, and the real hardware telemetry.

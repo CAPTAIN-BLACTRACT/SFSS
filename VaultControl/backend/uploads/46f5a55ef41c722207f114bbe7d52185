@@ -1,0 +1,64 @@
+Phase 1: The Vaulting (Sender’s Side)
+
+Intuitive Concept:
+When the sender decides to share a file, our system doesn't just send it. It locks the file inside an indestructible safe, throws the safe over the internet to the receiver, and hands the only key to our centralized server. The sender then uses a web dashboard to tell the server exactly who is allowed to ask for that key and where they must be to get it.
+
+Technical Execution:
+
+    Encryption at Rest: The sender's client generates a random symmetric key (AES-256-GCM) and encrypts the file locally.
+
+    Key Escrow: The encrypted file payload is completely decoupled from the key. The symmetric key (the DEK - Data Encryption Key) is sent to our Key Management Server (KMS).
+
+    Database Insertion: The KMS wraps the DEK using its Master Key and stores it as a binary blob in the PostgreSQL Files_Vault table.
+
+    Policy Creation: The sender uses the React dashboard to create rules in the Access_Policies table, defining allowed IP networks (CIDR blocks) or hardware IDs.
+
+Phase 2: The Interception (Receiver’s Machine)
+
+Intuitive Concept:
+The receiver downloads the "safe" (the encrypted file) and tries to open it. Our custom app steps in and says, "Hold on, let me check your ID and your surroundings." It takes a deep scan of the physical computer and the local Wi-Fi to ensure the receiver isn't hiding behind a VPN or running a hacker's virtual machine.
+
+Technical Execution:
+
+    Execution Trap: The user clicks the file, which is associated with our Rust Client Agent.
+
+    Hardware Fingerprinting: The Rust agent executes raw system calls (bypassing the standard library to prevent hooking) to query the CPU serials (CPUID), the motherboard UUID (SMBIOS), and requests a cryptographic Quote from the physical TPM 2.0 chip.
+
+    Network Fencing: The agent queries the local network interfaces (netlink on Linux) to hash the MAC addresses (BSSID) of nearby Wi-Fi routers and checks the routing table to ensure no VPN tunnels (like tun0) are active.
+
+Phase 3: The Interrogation (The Network Handshake)
+
+Intuitive Concept:
+The app knocks on our server's door, proves it is the genuine app (not a malicious script), and hands over the receiver's hardware fingerprint and network location. The server acts as a ruthless bouncer: it checks the sender's rules. If the sender clicked "Revoke" five seconds ago, or if the receiver is on the wrong Wi-Fi, the server slams the door.
+
+Technical Execution:
+
+    The Secure Tunnel: The Rust agent establishes a Mutual TLS (mTLS) connection with the KMS API Gateway, cryptographically proving its identity via Certificate Pinning and its own Ed25519 client certificate.
+
+    The Payload: The agent packages the file ID, the hardware hashes, the TPM Quote, and a server-provided nonce into a strictly typed Protocol Buffer (Protobuf) message, signs it, and sends it.
+
+    The Validation: The Axum/Actix KMS backend verifies the signature. The Context Engine queries the PostgreSQL database. It checks if global_status is REVOKED. If active, it does a bitwise AND operation to ensure the incoming IP matches the allowed CIDR block, and verifies the hardware hashes match the Access_Policies.
+
+Phase 4: The Volatile Decryption (The Viewing)
+
+Intuitive Concept:
+The server approves the request and sends the key down a secure tube. The app opens the file, but it refuses to write a single drop of ink onto the computer's hard drive. It projects the file directly into the computer's short-term memory (RAM) and shows it on the screen.
+
+Technical Execution:
+
+    Key Delivery: The KMS wraps the AES key in a one-time ephemeral key (ChaCha20-Poly1305) for Perfect Forward Secrecy and transmits it.
+
+    Memory Locking: Before unwrapping the key, the Rust agent executes an mlock() system call. This creates a secure RAM buffer and explicitly forbids the Operating System from paging/swapping this memory block to the physical hard disk.
+
+    In-Memory Rendering: The agent decrypts the payload directly into the mlock buffer. A lightweight UI frame reads from this buffer to render the pixels to the user's screen.
+
+Phase 5: The Self-Destruct (The Clean Up)
+
+Intuitive Concept:
+The moment the user clicks the "X" to close the file, or if they try to forcefully kill the app to freeze the system, the file instantly vaporizes. The app aggressively scrubs the memory clean so not even a microscopic trace is left behind for data-recovery tools to find.
+
+Technical Execution:
+
+    Volatile Zeroization: Dropping the memory reference isn't enough, as compilers optimize away standard wipe loops. The Rust buffer struct implements the ZeroizeOnDrop trait, forcing the CPU to execute a std::ptr::write_volatile command, overwriting every byte with 0x00 the exact microsecond the window closes.
+
+    The Dead Man's Switch: The agent runs aggressive signal handlers (signal-hook). If the OS sends a SIGTERM or SIGINT (because the user tried to force-quit the process via Task Manager or Terminal), the handler intercepts the kill command, executes the volatile zeroization of the mlock buffer first, and then allows the app to die.

@@ -1,0 +1,27 @@
+[package]
+name = "secure_agent"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+libc = "0.2"
+zeroize = { version = "1.6", features = ["zeroize_derive"] }
+signal-hook = "0.3"
+mac_address = "1.1"
+sha2 = "0.10"
+prost = "0.12"
+reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "json", "stream"] }
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+clap = { version = "4.4", features = ["derive"] }
+aes-gcm = "0.10"
+chacha20poly1305 = "0.10"
+ed25519-dalek = { version = "2.0", features = ["rand_core"] }
+x25519-dalek = { version = "2.0", features = ["static_secrets"] }
+hkdf = "0.12"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rand = "0.8"
+
+[build-dependencies]
+prost-build = "0.12"

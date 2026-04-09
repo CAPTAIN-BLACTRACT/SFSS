@@ -1,0 +1,5 @@
+.env
+target/
+certs/
+**/*.rs.bk
+Cargo.lock

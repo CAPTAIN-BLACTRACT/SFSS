@@ -1,0 +1,2 @@
+add tpm 2.0 protection for step 3
+
